@@ -468,11 +468,14 @@ func TestWalkString(t *testing.T) {
 	t.Run("str", func(t *testing.T) {
 		val := "str"
 		require.NoError(t, New(func(info WalkInfo) error {
-			require.Equal(t, reflect.String, info.Value.Kind())
-			require.NotZero(t, info.InternalStructSize)
-			require.NotZero(t, info.DataPointer)
+			if info.Value.Kind() == reflect.String {
+				require.Equal(t, reflect.String, info.Value.Kind())
+				require.NotZero(t, info.InternalStructSize)
+				require.True(t, info.HasDirectPointer())
+				require.True(t, info.HasDataPointer())
+			}
 			return nil
-		}).Walk(val))
+		}).Walk(&val))
 	})
 }
 
