@@ -65,6 +65,7 @@ type Walker struct {
 	callback WalkFunc
 	visited  map[unsafe.Pointer]map[reflect.Type]empty
 
+	//nolint:unused,structcheck
 	_denyCopyByValue sync.Mutex // error in go vet if try to copy Walker by value
 }
 

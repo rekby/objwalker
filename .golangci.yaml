@@ -1,0 +1,3 @@
+run:
+    skip-files:
+        - "unsafe_.*_1_17.go"
