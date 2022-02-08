@@ -144,7 +144,7 @@ func (walker *Walker) walkValue(info WalkInfo) error {
 	case reflect.Struct:
 		return walker.walkStruct(info)
 	default:
-		return fmt.Errorf("can't walk into type %v: %w", info.Value.Type(), ErrUnknownKind)
+		return fmt.Errorf("can't walk into kind %v value: %w", info.Value.Kind(), ErrUnknownKind)
 	}
 }
 
@@ -165,7 +165,7 @@ func (walker *Walker) walkArray(info WalkInfo) error {
 	for i := 0; i < vLen; i++ {
 		item := info.Value.Index(i)
 		iteminfo := newWalkerInfo(item)
-		if err := walker.walkValue(iteminfo); err != nil && !errors.Is(err, ErrSkip) {
+		if err := walker.walkValue(iteminfo); err != nil {
 			return err
 		}
 	}
