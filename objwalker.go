@@ -18,7 +18,6 @@ var (
 
 	// ErrUnknownKind mean reflect walk see unknown kind of type - need to update library
 	ErrUnknownKind = errors.New("unknown kind")
-	ErrInvalidKind = errors.New("invalid kind")
 )
 
 // WalkInfo send to walk callback with every value
@@ -70,6 +69,7 @@ func newWalkerInfo(v reflect.Value) (res WalkInfo) {
 	return res
 }
 
+// WalkFunc is type of callback function
 type WalkFunc func(info WalkInfo) error
 
 type empty struct{}
@@ -83,6 +83,8 @@ type Walker struct {
 	_denyCopyByValue sync.Mutex // error in go vet if try to copy Walker by value
 }
 
+// WithDisableLoopProtection disable loop protection.
+// callback must self-detect loops and return ErrSkip
 func (walker *Walker) WithDisableLoopProtection() *Walker {
 	walker.LoopProtection = false
 	return walker
@@ -94,6 +96,9 @@ func (walker *Walker) WithDisableLoopProtection() *Walker {
 // for example:
 // type T struct { Val int }
 // f will called for struct T and for Pub int
+//
+// if f return ErrSkip - skip the struct (, map, slice, ... see ErrSkip comment)
+// if f return other non nil error - stop walk and return the error to Walk caller
 func New(f WalkFunc) *Walker {
 	return &Walker{
 		LoopProtection: true,
