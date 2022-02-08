@@ -2,6 +2,7 @@ package objwalker
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -540,4 +541,28 @@ func TestWalkStruct(t *testing.T) {
 
 		}
 	})
+}
+
+func ExampleWalker() {
+	type S struct {
+		Val1  int
+		Slice []string
+	}
+
+	v := S{
+		Val1:  2,
+		Slice: []string{"hello", "world"},
+	}
+	_ = New(func(info WalkInfo) error {
+		val := info.Value.Interface()
+		_ = val
+		if info.IsStructField {
+			fmt.Println(info.Value.Interface())
+		}
+		return nil
+	}).Walk(v)
+
+	// Output:
+	// 2
+	// [hello world]
 }
