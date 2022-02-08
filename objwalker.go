@@ -8,9 +8,6 @@ import (
 	"unsafe"
 )
 
-// InternalsMaxGoVersion - go version from which actualize internal struct sizes
-const InternalsMaxGoVersion = "go1.17"
-
 var zeroPointer unsafe.Pointer
 
 var (
@@ -24,33 +21,50 @@ var (
 	ErrInvalidKind = errors.New("invalid kind")
 )
 
+// WalkInfo send to walk callback with every value
 type WalkInfo struct {
+	// Value - reflection Value for inspect/manupulate variable
 	Value reflect.Value
 
-	IsFlat        bool
-	IsMapKey      bool
-	IsMapValue    bool
+	// IsFlat mean Value is simple builtin value
+	IsFlat bool
+
+	// IsMapKey mean Value direct use in map key
+	IsMapKey bool
+
+	// IsMapValue mean Value direct used in map value
+	IsMapValue bool
+
+	// IsStructField mean Value is direct used as struct field
 	IsStructField bool
 
 	// IsVisited true if loop protection disabled and walker detect about value was visited already
 	IsVisited bool
 
-	// Fixed size of internal struct, not contained content size
+	// InternalStructSize fixed size of internal struct, not contained content size
 	// approximately - from go version and may be stale
 	InternalStructSize int
 
-	// DirectPointer 0 if value not addresable
-	DirectPointer    unsafe.Pointer
-	DirectPointerInt uintptr
+	// DirectPointer hold address of Value data (Value.ptr) 0 if value not addresable
+	DirectPointer unsafe.Pointer
 
-	// Pointer to data of string, slice if available
+	// Pointer to underly data buffer of string and slice if available
 	DataPointer unsafe.Pointer
+}
+
+// HasDirectPointer check if w.DirectPointer has non zero value
+func (w *WalkInfo) HasDirectPointer() bool {
+	return w.DirectPointer != zeroPointer
+}
+
+// HasDataPointer check if w.DataPointer has non zero value
+func (w *WalkInfo) HasDataPointer() bool {
+	return w.DataPointer != zeroPointer
 }
 
 func newWalkerInfo(v reflect.Value) (res WalkInfo) {
 	if v.CanAddr() {
 		res.DirectPointer = unsafe.Pointer(v.UnsafeAddr())
-		res.DirectPointerInt = uintptr(res.DirectPointer)
 	}
 	res.Value = v
 	return res
