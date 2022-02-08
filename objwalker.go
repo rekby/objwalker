@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"runtime"
+	"sync"
 	"unsafe"
 )
 
@@ -15,7 +15,7 @@ var zeroPointer unsafe.Pointer
 
 var (
 	// ErrSkip - signal for skip iteration over value
-	// can be returned for map, map key, array, slice, ptr, interface
+	// can be returned for array, interface, map, map key, slice, struct, ptr,
 	// for other kinds - unspecified behaviour and it may be change for feature versions
 	ErrSkip = errors.New("skip value")
 
@@ -40,16 +40,17 @@ type WalkInfo struct {
 	InternalStructSize int
 
 	// DirectPointer 0 if value not addresable
-	DirectPointer unsafe.Pointer
+	DirectPointer    unsafe.Pointer
+	DirectPointerInt uintptr
 
 	// Pointer to data of string, slice if available
 	DataPointer unsafe.Pointer
 }
 
 func newWalkerInfo(v reflect.Value) (res WalkInfo) {
-	runtime.Version()
 	if v.CanAddr() {
 		res.DirectPointer = unsafe.Pointer(v.UnsafeAddr())
+		res.DirectPointerInt = uintptr(res.DirectPointer)
 	}
 	res.Value = v
 	return res
@@ -62,15 +63,28 @@ type Walker struct {
 	LoopProtection bool
 
 	callback WalkFunc
-	visited  map[unsafe.Pointer]empty
+	visited  map[unsafe.Pointer]map[reflect.Type]empty
+
+	_denyCopyByValue sync.Mutex // error in go vet if try to copy Walker by value
 }
 
+func (walker *Walker) WithDisableLoopProtection() *Walker {
+	walker.LoopProtection = false
+	return walker
+}
+
+// New create new walker with f callback
+// f will call for every field, item, etc of walked object
+// f can called multiply times for same address with different item type
+// for example:
+// type T struct { Val int }
+// f will called for struct T and for Pub int
 func New(f WalkFunc) *Walker {
 	return &Walker{
 		LoopProtection: true,
 
 		callback: f,
-		visited:  make(map[unsafe.Pointer]empty),
+		visited:  make(map[unsafe.Pointer]map[reflect.Type]empty),
 	}
 }
 
@@ -82,25 +96,23 @@ func (walker *Walker) Walk(v interface{}) error {
 	}
 
 	valueInfo := newWalkerInfo(reflect.ValueOf(v))
-	err := walker.walkValue(valueInfo)
-	if errors.Is(err, ErrSkip) {
-		return nil
-	}
-	return err
+	return walker.walkValue(valueInfo)
 }
 
 func (walker *Walker) walkValue(info WalkInfo) error {
 	if info.DirectPointer != zeroPointer {
-		_, ok := walker.visited[info.DirectPointer]
+		types := walker.visited[info.DirectPointer]
+		if types == nil {
+			types = make(map[reflect.Type]empty)
+			walker.visited[info.DirectPointer] = types
+		}
 
-		if ok {
+		t := info.Value.Type()
+		_, okType := types[t]
+		if okType {
 			info.IsVisited = true
 		} else {
-			// not mark array and struct - for prevent false positive detection of them first item/field
-			kind := info.Value.Kind()
-			if kind != reflect.Array && kind != reflect.Struct {
-				walker.visited[info.DirectPointer] = empty{}
-			}
+			types[t] = empty{}
 		}
 
 		if info.IsVisited && walker.LoopProtection {
@@ -109,8 +121,6 @@ func (walker *Walker) walkValue(info WalkInfo) error {
 	}
 
 	switch info.Value.Kind() {
-	case reflect.Invalid:
-		return fmt.Errorf("stop walking: %w", ErrInvalidKind)
 	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8,
 		reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64,
 		reflect.Complex128, reflect.UnsafePointer:
@@ -227,7 +237,9 @@ func (walker *Walker) walkMap(info WalkInfo) error {
 }
 
 func (walker *Walker) walkSlice(info WalkInfo) error {
-	info.InternalStructSize = sliceSize()
+	const sliceSize = int(unsafe.Sizeof(reflect.SliceHeader{}) + uintptr(-int(unsafe.Sizeof(reflect.SliceHeader{}))&(maxAlign-1)))
+
+	info.InternalStructSize = sliceSize
 	if info.Value.Len() > 0 {
 		info.DataPointer = newWalkerInfo(info.Value.Index(0)).DirectPointer
 	}
@@ -251,15 +263,27 @@ func (walker *Walker) walkSlice(info WalkInfo) error {
 }
 
 func (walker *Walker) walkString(info WalkInfo) error {
-	info.InternalStructSize = stringSize()
+	const stringHeaderSize = int(unsafe.Sizeof(reflect.StringHeader{}) + uintptr(-int(unsafe.Sizeof(reflect.StringHeader{}))&(maxAlign-1)))
+
+	info.InternalStructSize = stringHeaderSize
 	if info.Value.Len() > 0 {
-		info.DataPointer = newWalkerInfo(info.Value.Index(0)).DirectPointer
+		s := info.Value.String()
+		sPointer := &s
+		sInternalPointer := (*reflect.StringHeader)(unsafe.Pointer(sPointer))
+		info.DataPointer = unsafe.Pointer(sInternalPointer.Data)
 	}
 
 	return walker.callback(info)
 }
 
 func (walker *Walker) walkStruct(info WalkInfo) error {
+	if err := walker.callback(info); err != nil {
+		if errors.Is(err, ErrSkip) {
+			return nil
+		}
+		return err
+	}
+
 	numField := info.Value.NumField()
 	for i := 0; i < numField; i++ {
 		fieldVal := info.Value.Field(i)
