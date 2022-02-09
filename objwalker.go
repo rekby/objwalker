@@ -74,22 +74,10 @@ type WalkFunc func(info WalkInfo) error
 
 type empty struct{}
 
-// Walker provide settings and state for Walk function
-type Walker struct {
+// WalkerOptions provide settings and state for Walk function
+type WalkerOptions struct {
 	LoopProtection bool
-
-	callback WalkFunc
-	visited  map[unsafe.Pointer]map[reflect.Type]empty
-
-	//nolint:unused,structcheck
-	_denyCopyByValue sync.Mutex // error in go vet if try to copy Walker by value
-}
-
-// WithDisableLoopProtection disable loop protection.
-// callback must self-detect loops and return ErrSkip
-func (walker *Walker) WithDisableLoopProtection() *Walker {
-	walker.LoopProtection = false
-	return walker
+	callback       WalkFunc
 }
 
 // New create new walker with f callback
@@ -101,12 +89,39 @@ func (walker *Walker) WithDisableLoopProtection() *Walker {
 //
 // if f return ErrSkip - skip the struct (, map, slice, ... see ErrSkip comment)
 // if f return other non nil error - stop walk and return the error to Walk caller
-func New(f WalkFunc) *Walker {
-	return &Walker{
+func New(f WalkFunc) *WalkerOptions {
+	return &WalkerOptions{
 		LoopProtection: true,
+		callback:       f,
+	}
+}
 
-		callback: f,
-		visited:  make(map[unsafe.Pointer]map[reflect.Type]empty),
+// Walk create new walker with empty state and run Walk over object
+func (opts *WalkerOptions) Walk(v interface{}) error {
+	walker := NewWalker(*opts)
+	return walker.Walk(v)
+}
+
+// WithDisableLoopProtection disable loop protection.
+// callback must self-detect loops and return ErrSkip
+func (opts *WalkerOptions) WithDisableLoopProtection() *WalkerOptions {
+	opts.LoopProtection = false
+	return opts
+}
+
+type Walker struct {
+	WalkerOptions
+	visited map[unsafe.Pointer]map[reflect.Type]empty
+
+	//nolint:unused,structcheck
+	_denyCopyByValue sync.Mutex // error in go vet if try to copy Walker by value
+}
+
+func NewWalker(opts WalkerOptions) *Walker {
+	return &Walker{
+		WalkerOptions:    opts,
+		visited:          make(map[unsafe.Pointer]map[reflect.Type]empty),
+		_denyCopyByValue: sync.Mutex{},
 	}
 }
 
