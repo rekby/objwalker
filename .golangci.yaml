@@ -1,3 +1,24 @@
-run:
-    skip-files:
-        - "unsafe_.*_1_17.go"
+issues:
+    exclude-rules:
+        - path: _test\.go
+          linters:
+              - cyclop
+              - exhaustivestruct
+              - forcetypeassert
+
+linters:
+    enable:
+        - cyclop
+        - dupl
+        - errname
+        - errorlint
+        - exhaustive
+        - exhaustivestruct
+linters-settings:
+    govet:
+        enable-all: true
+        disable:
+            - fieldalignment
+
+output:
+    sort-results: true

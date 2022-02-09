@@ -1,17 +1,17 @@
+//nolint:cyclop
 package objwalker
 
 import (
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	errTest = errors.New("test")
-)
+var errTest = errors.New("test")
 
 func TestWalker_LoopProtected(t *testing.T) {
 	type S struct {
@@ -236,13 +236,12 @@ func TestWalker_WalkFunc(t *testing.T) {
 }
 
 func TestWalker_Interface(t *testing.T) {
-	testErr := errors.New("asd")
-	val := []error{testErr}
+	val := []error{errTest}
 	wasInterface := false
 	require.NoError(t, New(func(info *WalkInfo) error {
 		if info.Value.Kind() == reflect.Interface {
 			wasInterface = true
-			require.Equal(t, testErr, info.Value.Interface())
+			require.Equal(t, errTest, info.Value.Interface())
 		}
 		return nil
 	}).Walk(val))
@@ -250,7 +249,6 @@ func TestWalker_Interface(t *testing.T) {
 }
 
 func TestWalker_Map(t *testing.T) {
-
 	t.Run("Nil", func(t *testing.T) {
 		var m map[int]int
 		callTimes := 0
@@ -262,7 +260,7 @@ func TestWalker_Map(t *testing.T) {
 
 	for _, testName := range []string{"Ok", "SkipMap", "SkipKey", "ErrorMap", "ErrorKey", "ErrorValue"} {
 		t.Run(testName, func(t *testing.T) {
-			var val = map[int]string{1: "2"}
+			val := map[int]string{1: "2"}
 			wasMap := false
 			wasKey := false
 			wasValue := false
@@ -290,7 +288,6 @@ func TestWalker_Map(t *testing.T) {
 				}
 				if info.Value.Kind() == reflect.String {
 					wasValue = true
-					require.True(t, info.IsMapValue)
 					require.Equal(t, info.Value.String(), "2")
 					if testName == "ErrorValue" {
 						return errTest
@@ -337,7 +334,7 @@ func TestWalker_Ptr(t *testing.T) {
 		for _, testName := range []string{"Ok", "Skip", "Error"} {
 			t.Run(testName, func(t *testing.T) {
 				vInt := 2
-				var val = &vInt
+				val := &vInt
 				wasPtr := false
 				wasInt := false
 				err := New(func(info *WalkInfo) error {
@@ -372,7 +369,6 @@ func TestWalker_Ptr(t *testing.T) {
 				default:
 					t.Fatal(testName)
 				}
-
 			})
 		}
 	})
@@ -381,13 +377,13 @@ func TestWalker_Ptr(t *testing.T) {
 		require.NoError(t, New(func(info *WalkInfo) error {
 			return nil
 		}).Walk(val))
-
 	})
 }
 
-func TestWalker_WalkValue(t *testing.T) {
+func TestWalker_KindRoute(t *testing.T) {
 	t.Run("BadKind", func(t *testing.T) {
-		err := newWalkerState(Walker{}).walkValue(&WalkInfo{})
+		//nolint:exhaustivestruct
+		err := newWalkerState(Walker{}).kindRoute(reflect.Kind(math.MaxUint), &WalkInfo{})
 		require.ErrorIs(t, err, ErrUnknownKind)
 	})
 }
@@ -447,7 +443,6 @@ func TestWalker_WalkSlice(t *testing.T) {
 			default:
 				t.Fatal(testName)
 			}
-
 		})
 	}
 }
@@ -480,6 +475,7 @@ func TestWalkStruct(t *testing.T) {
 			return nil
 		}).Walk(val))
 	})
+
 	t.Run("Fields", func(t *testing.T) {
 		val := struct {
 			Pub  int
@@ -534,7 +530,6 @@ func TestWalkStruct(t *testing.T) {
 					t.Fatal(testName)
 				}
 			})
-
 		}
 	})
 }
@@ -545,20 +540,19 @@ func ExampleWalker() {
 		Slice []string
 	}
 
-	v := S{
+	val := S{
 		Val1:  2,
 		Slice: []string{"hello", "world"},
 	}
 	_ = New(func(info *WalkInfo) error {
-		val := info.Value.Interface()
-		_ = val
-		if info.IsStructField {
-			fmt.Println(info.Value.Interface())
-		}
+		fmt.Println(info.Value.Interface())
 		return nil
-	}).Walk(v)
+	}).Walk(val)
 
 	// Output:
+	// {2 [hello world]}
 	// 2
 	// [hello world]
+	// hello
+	// world
 }
