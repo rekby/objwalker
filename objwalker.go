@@ -73,6 +73,8 @@ func newWalkerInfo(v reflect.Value) (res WalkInfo) {
 type WalkFunc func(info WalkInfo) error
 
 type empty struct{}
+
+// Walker provide settings and state for Walk function
 type Walker struct {
 	LoopProtection bool
 

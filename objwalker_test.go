@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	testErr = errors.New("test")
+	errTest = errors.New("test")
 )
 
 func TestWalker_LoopProtected(t *testing.T) {
@@ -42,11 +42,11 @@ func TestWalker_LoopProtected(t *testing.T) {
 		err := New(func(info WalkInfo) error {
 			callTimes++
 			if callTimes == callTimesLimit {
-				return testErr
+				return errTest
 			}
 			return nil
 		}).WithDisableLoopProtection().Walk(&s)
-		require.Equal(t, testErr, err)
+		require.Equal(t, errTest, err)
 		require.Equal(t, callTimesLimit, callTimes)
 	})
 }
@@ -143,7 +143,7 @@ func TestWalker_WalkArray(t *testing.T) {
 						return ErrSkip
 					}
 					if testName == "ErrorArray" {
-						return testErr
+						return errTest
 					}
 				}
 				if info.Value.Kind() == reflect.Int {
@@ -154,7 +154,7 @@ func TestWalker_WalkArray(t *testing.T) {
 						wasTwo = true
 					}
 					if testName == "ErrorItem" {
-						return testErr
+						return errTest
 					}
 				}
 				return nil
@@ -172,12 +172,12 @@ func TestWalker_WalkArray(t *testing.T) {
 				require.False(t, wasOne)
 				require.False(t, wasTwo)
 			case "ErrorArray":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.True(t, wasArray)
 				require.False(t, wasOne)
 				require.False(t, wasTwo)
 			case "ErrorItem":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.True(t, wasArray)
 				require.True(t, wasOne)
 				require.False(t, wasTwo)
@@ -199,8 +199,8 @@ func TestWalker_WalkChan(t *testing.T) {
 	})
 	t.Run("Err", func(t *testing.T) {
 		require.ErrorIs(t, New(func(info WalkInfo) error {
-			return testErr
-		}).Walk(val), testErr)
+			return errTest
+		}).Walk(val), errTest)
 	})
 }
 
@@ -214,8 +214,8 @@ func TestWalker_WalkFlat(t *testing.T) {
 	})
 	t.Run("Err", func(t *testing.T) {
 		require.ErrorIs(t, New(func(info WalkInfo) error {
-			return testErr
-		}).Walk(val), testErr)
+			return errTest
+		}).Walk(val), errTest)
 	})
 }
 
@@ -231,8 +231,8 @@ func TestWalker_WalkFunc(t *testing.T) {
 	t.Run("Err", func(t *testing.T) {
 		require.ErrorIs(t, New(func(info WalkInfo) error {
 			require.Equal(t, reflect.Func, info.Value.Kind())
-			return testErr
-		}).Walk(val), testErr)
+			return errTest
+		}).Walk(val), errTest)
 	})
 }
 
@@ -275,7 +275,7 @@ func TestWalker_Map(t *testing.T) {
 						return ErrSkip
 					}
 					if testName == "ErrorMap" {
-						return testErr
+						return errTest
 					}
 				}
 				if info.Value.Kind() == reflect.Int {
@@ -286,7 +286,7 @@ func TestWalker_Map(t *testing.T) {
 						return ErrSkip
 					}
 					if testName == "ErrorKey" {
-						return testErr
+						return errTest
 					}
 				}
 				if info.Value.Kind() == reflect.String {
@@ -294,7 +294,7 @@ func TestWalker_Map(t *testing.T) {
 					require.True(t, info.IsMapValue)
 					require.Equal(t, info.Value.String(), "2")
 					if testName == "ErrorValue" {
-						return testErr
+						return errTest
 					}
 				}
 				return nil
@@ -315,15 +315,15 @@ func TestWalker_Map(t *testing.T) {
 				require.True(t, wasKey)
 				require.False(t, wasValue)
 			case "ErrorMap":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.False(t, wasKey)
 				require.False(t, wasValue)
 			case "ErrorKey":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.True(t, wasKey)
 				require.False(t, wasValue)
 			case "ErrorValue":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.True(t, wasKey)
 				require.True(t, wasValue)
 			default:
@@ -348,7 +348,7 @@ func TestWalker_Ptr(t *testing.T) {
 							return ErrSkip
 						}
 						if testName == "Error" {
-							return testErr
+							return errTest
 						}
 					}
 					if info.Value.Kind() == reflect.Int {
@@ -367,7 +367,7 @@ func TestWalker_Ptr(t *testing.T) {
 					require.True(t, wasPtr)
 					require.False(t, wasInt)
 				case "Error":
-					require.ErrorIs(t, err, testErr)
+					require.ErrorIs(t, err, errTest)
 					require.True(t, wasPtr)
 					require.False(t, wasInt)
 				default:
@@ -410,14 +410,14 @@ func TestWalker_WalkSlice(t *testing.T) {
 						return ErrSkip
 					}
 					if testName == "Error" {
-						return testErr
+						return errTest
 					}
 				}
 				if info.Value.Kind() == reflect.Int {
 					if info.Value.Interface().(int) == 1 {
 						wasOne = true
 						if testName == "ErrorItem" {
-							return testErr
+							return errTest
 						}
 					}
 					if info.Value.Interface().(int) == 2 {
@@ -439,12 +439,12 @@ func TestWalker_WalkSlice(t *testing.T) {
 				require.False(t, wasOne)
 				require.False(t, wasTwo)
 			case "Error":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.True(t, wasSlice)
 				require.False(t, wasOne)
 				require.False(t, wasTwo)
 			case "ErrorItem":
-				require.ErrorIs(t, err, testErr)
+				require.ErrorIs(t, err, errTest)
 				require.True(t, wasSlice)
 				require.True(t, wasOne)
 				require.False(t, wasTwo)
@@ -506,7 +506,7 @@ func TestWalkStruct(t *testing.T) {
 							return ErrSkip
 						}
 						if testName == "Error" {
-							return testErr
+							return errTest
 						}
 					}
 					if kind == reflect.Int {
@@ -533,7 +533,7 @@ func TestWalkStruct(t *testing.T) {
 					require.False(t, wasPublic)
 					require.False(t, wasPrivate)
 				case "Error":
-					require.ErrorIs(t, err, testErr)
+					require.ErrorIs(t, err, errTest)
 					require.True(t, wasStruct)
 					require.False(t, wasPublic)
 					require.False(t, wasPrivate)
