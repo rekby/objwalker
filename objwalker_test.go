@@ -388,7 +388,7 @@ func TestWalker_Ptr(t *testing.T) {
 
 func TestWalker_WalkValue(t *testing.T) {
 	t.Run("BadKind", func(t *testing.T) {
-		err := NewWalker(WalkerOptions{}).walkValue(WalkInfo{})
+		err := newWalkerState(Walker{}).walkValue(WalkInfo{})
 		require.ErrorIs(t, err, ErrUnknownKind)
 	})
 }
