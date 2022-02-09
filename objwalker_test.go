@@ -23,7 +23,7 @@ func TestWalker_LoopProtected(t *testing.T) {
 
 	t.Run("Protected", func(t *testing.T) {
 		callTimes := 0
-		err := New(func(info WalkInfo) error {
+		err := New(func(info *WalkInfo) error {
 			callTimes++
 			return nil
 		}).Walk(&s)
@@ -39,7 +39,7 @@ func TestWalker_LoopProtected(t *testing.T) {
 	t.Run("NoProtected", func(t *testing.T) {
 		callTimes := 0
 		callTimesLimit := 10
-		err := New(func(info WalkInfo) error {
+		err := New(func(info *WalkInfo) error {
 			callTimes++
 			if callTimes == callTimesLimit {
 				return errTest
@@ -53,7 +53,7 @@ func TestWalker_LoopProtected(t *testing.T) {
 
 func TestWalker_Walk(t *testing.T) {
 	t.Run("Ok", func(t *testing.T) {
-		walker := New(func(info WalkInfo) error {
+		walker := New(func(info *WalkInfo) error {
 			return nil
 		})
 		var v int
@@ -71,7 +71,7 @@ func TestWalker_Walk(t *testing.T) {
 		}
 
 		var v TestStructB
-		err := New(func(info WalkInfo) error {
+		err := New(func(info *WalkInfo) error {
 			kind := info.Value.Kind()
 			if kind == reflect.Int {
 				info.Value.SetInt(1)
@@ -94,7 +94,7 @@ func TestWalker_Walk(t *testing.T) {
 		t.Run("UsualReflection", func(t *testing.T) {
 			var v TestStruct
 			require.Panics(t, func() {
-				_ = New(func(info WalkInfo) error {
+				_ = New(func(info *WalkInfo) error {
 					if info.Value.Kind() == reflect.Int {
 						info.Value.SetInt(1)
 					}
@@ -106,7 +106,7 @@ func TestWalker_Walk(t *testing.T) {
 			// change private field by reflection is denied, but it is possible through direct pointer
 			// usually it is bad idea
 			var v TestStruct
-			err := New(func(info WalkInfo) error {
+			err := New(func(info *WalkInfo) error {
 				if info.Value.Kind() == reflect.Int {
 					val := reflect.NewAt(info.Value.Type(), info.DirectPointer)
 					val.Elem().SetInt(1)
@@ -120,7 +120,7 @@ func TestWalker_Walk(t *testing.T) {
 
 	t.Run("nil", func(t *testing.T) {
 		called := false
-		err := New(func(info WalkInfo) error {
+		err := New(func(info *WalkInfo) error {
 			called = true
 			return nil
 		}).Walk(nil)
@@ -136,7 +136,7 @@ func TestWalker_WalkArray(t *testing.T) {
 			wasArray := false
 			wasOne := false
 			wasTwo := false
-			err := New(func(info WalkInfo) error {
+			err := New(func(info *WalkInfo) error {
 				if info.Value.Kind() == reflect.Array {
 					wasArray = true
 					if testName == "Skip" {
@@ -191,14 +191,13 @@ func TestWalker_WalkArray(t *testing.T) {
 func TestWalker_WalkChan(t *testing.T) {
 	val := make(chan bool)
 	t.Run("ok", func(t *testing.T) {
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			require.Equal(t, reflect.Chan, info.Value.Kind())
-			require.NotZero(t, info.InternalStructSize)
 			return nil
 		}).Walk(val))
 	})
 	t.Run("Err", func(t *testing.T) {
-		require.ErrorIs(t, New(func(info WalkInfo) error {
+		require.ErrorIs(t, New(func(info *WalkInfo) error {
 			return errTest
 		}).Walk(val), errTest)
 	})
@@ -207,13 +206,13 @@ func TestWalker_WalkChan(t *testing.T) {
 func TestWalker_WalkFlat(t *testing.T) {
 	val := 4
 	t.Run("Ok", func(t *testing.T) {
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			require.Equal(t, reflect.Int, info.Value.Kind())
 			return nil
 		}).Walk(val))
 	})
 	t.Run("Err", func(t *testing.T) {
-		require.ErrorIs(t, New(func(info WalkInfo) error {
+		require.ErrorIs(t, New(func(info *WalkInfo) error {
 			return errTest
 		}).Walk(val), errTest)
 	})
@@ -222,14 +221,14 @@ func TestWalker_WalkFlat(t *testing.T) {
 func TestWalker_WalkFunc(t *testing.T) {
 	val := func() int { return 1 }
 	t.Run("Ok", func(t *testing.T) {
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			require.Equal(t, reflect.Func, info.Value.Kind())
 			return nil
 		}).Walk(val))
 	})
 
 	t.Run("Err", func(t *testing.T) {
-		require.ErrorIs(t, New(func(info WalkInfo) error {
+		require.ErrorIs(t, New(func(info *WalkInfo) error {
 			require.Equal(t, reflect.Func, info.Value.Kind())
 			return errTest
 		}).Walk(val), errTest)
@@ -240,7 +239,7 @@ func TestWalker_Interface(t *testing.T) {
 	testErr := errors.New("asd")
 	val := []error{testErr}
 	wasInterface := false
-	require.NoError(t, New(func(info WalkInfo) error {
+	require.NoError(t, New(func(info *WalkInfo) error {
 		if info.Value.Kind() == reflect.Interface {
 			wasInterface = true
 			require.Equal(t, testErr, info.Value.Interface())
@@ -255,7 +254,7 @@ func TestWalker_Map(t *testing.T) {
 	t.Run("Nil", func(t *testing.T) {
 		var m map[int]int
 		callTimes := 0
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			callTimes++
 			return nil
 		}).Walk(m))
@@ -268,7 +267,7 @@ func TestWalker_Map(t *testing.T) {
 			wasKey := false
 			wasValue := false
 
-			err := New(func(info WalkInfo) error {
+			err := New(func(info *WalkInfo) error {
 				if info.Value.Kind() == reflect.Map {
 					wasMap = true
 					if testName == "SkipMap" {
@@ -280,7 +279,7 @@ func TestWalker_Map(t *testing.T) {
 				}
 				if info.Value.Kind() == reflect.Int {
 					wasKey = true
-					require.True(t, info.IsMapKey)
+					require.True(t, info.IsMapKey())
 					require.Equal(t, info.Value.Int(), int64(1))
 					if testName == "SkipKey" {
 						return ErrSkip
@@ -341,7 +340,7 @@ func TestWalker_Ptr(t *testing.T) {
 				var val = &vInt
 				wasPtr := false
 				wasInt := false
-				err := New(func(info WalkInfo) error {
+				err := New(func(info *WalkInfo) error {
 					if info.Value.Kind() == reflect.Ptr {
 						wasPtr = true
 						if testName == "Skip" {
@@ -379,7 +378,7 @@ func TestWalker_Ptr(t *testing.T) {
 	})
 	t.Run("nil", func(t *testing.T) {
 		var val *int
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			return nil
 		}).Walk(val))
 
@@ -388,7 +387,7 @@ func TestWalker_Ptr(t *testing.T) {
 
 func TestWalker_WalkValue(t *testing.T) {
 	t.Run("BadKind", func(t *testing.T) {
-		err := newWalkerState(Walker{}).walkValue(WalkInfo{})
+		err := newWalkerState(Walker{}).walkValue(&WalkInfo{})
 		require.ErrorIs(t, err, ErrUnknownKind)
 	})
 }
@@ -400,7 +399,7 @@ func TestWalker_WalkSlice(t *testing.T) {
 			wasSlice := false
 			wasOne := false
 			wasTwo := false
-			err := New(func(info WalkInfo) error {
+			err := New(func(info *WalkInfo) error {
 				if info.Value.Kind() == reflect.Slice {
 					wasSlice = true
 					if testName == "Skip" {
@@ -456,20 +455,17 @@ func TestWalker_WalkSlice(t *testing.T) {
 func TestWalkString(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		val := ""
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			require.Equal(t, reflect.String, info.Value.Kind())
-			require.NotZero(t, info.InternalStructSize)
 			return nil
 		}).Walk(val))
 	})
 	t.Run("str", func(t *testing.T) {
 		val := "str"
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			if info.Value.Kind() == reflect.String {
 				require.Equal(t, reflect.String, info.Value.Kind())
-				require.NotZero(t, info.InternalStructSize)
 				require.True(t, info.HasDirectPointer())
-				require.True(t, info.HasDataPointer())
 			}
 			return nil
 		}).Walk(&val))
@@ -479,7 +475,7 @@ func TestWalkString(t *testing.T) {
 func TestWalkStruct(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		val := struct{}{}
-		require.NoError(t, New(func(info WalkInfo) error {
+		require.NoError(t, New(func(info *WalkInfo) error {
 			require.Equal(t, reflect.Struct, info.Value.Kind())
 			return nil
 		}).Walk(val))
@@ -495,7 +491,7 @@ func TestWalkStruct(t *testing.T) {
 				wasStruct := false
 				wasPublic := false
 				wasPrivate := false
-				err := New(func(info WalkInfo) error {
+				err := New(func(info *WalkInfo) error {
 					kind := info.Value.Kind()
 					if kind == reflect.Struct {
 						wasStruct = true
@@ -553,7 +549,7 @@ func ExampleWalker() {
 		Val1:  2,
 		Slice: []string{"hello", "world"},
 	}
-	_ = New(func(info WalkInfo) error {
+	_ = New(func(info *WalkInfo) error {
 		val := info.Value.Interface()
 		_ = val
 		if info.IsStructField {

@@ -25,11 +25,9 @@ type WalkInfo struct {
 	// Value - reflection Value for inspect/manupulate variable
 	Value reflect.Value
 
-	// IsFlat mean Value is simple builtin value
-	IsFlat bool
-
-	// IsMapKey mean Value direct use in map key
-	IsMapKey bool
+	// Parent is info of prev node in travel tree hierarchy
+	// Parent == nil for first visited value
+	Parent *WalkInfo
 
 	// IsMapValue mean Value direct used in map value
 	IsMapValue bool
@@ -40,15 +38,10 @@ type WalkInfo struct {
 	// IsVisited true if loop protection disabled and walker detect about value was visited already
 	IsVisited bool
 
-	// InternalStructSize fixed size of internal struct, not contained content size
-	// approximately - from go version and may be stale
-	InternalStructSize int
-
 	// DirectPointer hold address of Value data (Value.ptr) 0 if value not addresable
 	DirectPointer unsafe.Pointer
 
-	// Pointer to underly data buffer of string and slice if available
-	DataPointer unsafe.Pointer
+	isMapKey bool
 }
 
 // HasDirectPointer check if w.DirectPointer has non zero value
@@ -56,21 +49,35 @@ func (w *WalkInfo) HasDirectPointer() bool {
 	return w.DirectPointer != zeroPointer
 }
 
-// HasDataPointer check if w.DataPointer has non zero value
-func (w *WalkInfo) HasDataPointer() bool {
-	return w.DataPointer != zeroPointer
+// IsFlat mean Value is simple builtin value such as int, without additional dinamic/shared content
+func (w *WalkInfo) IsFlat() bool {
+	switch w.Value.Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8,
+		reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64,
+		reflect.Complex128, reflect.UnsafePointer:
+		return true
+	default:
+		return false
+	}
 }
 
-func newWalkerInfo(v reflect.Value) (res WalkInfo) {
+// IsMapKey mean Value direct use as map key
+func (w *WalkInfo) IsMapKey() bool {
+	return w.isMapKey
+}
+
+func newWalkerInfo(v reflect.Value, parent *WalkInfo) *WalkInfo {
+	var res WalkInfo
 	if v.CanAddr() {
 		res.DirectPointer = unsafe.Pointer(v.UnsafeAddr())
 	}
 	res.Value = v
-	return res
+	res.Parent = parent
+	return &res
 }
 
 // WalkFunc is type of callback function
-type WalkFunc func(info WalkInfo) error
+type WalkFunc func(info *WalkInfo) error
 
 type empty struct{}
 
@@ -130,11 +137,11 @@ func (state *walkerState) walk(v interface{}) error {
 		return nil
 	}
 
-	valueInfo := newWalkerInfo(reflect.ValueOf(v))
+	valueInfo := newWalkerInfo(reflect.ValueOf(v), nil)
 	return state.walkValue(valueInfo)
 }
 
-func (state *walkerState) walkValue(info WalkInfo) error {
+func (state *walkerState) walkValue(info *WalkInfo) error {
 	if info.DirectPointer != zeroPointer {
 		types := state.visited[info.DirectPointer]
 		if types == nil {
@@ -156,10 +163,6 @@ func (state *walkerState) walkValue(info WalkInfo) error {
 	}
 
 	switch info.Value.Kind() {
-	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8,
-		reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Complex64,
-		reflect.Complex128, reflect.UnsafePointer:
-		return state.walkFlat(info)
 	case reflect.Array:
 		return state.walkArray(info)
 	case reflect.Chan:
@@ -179,16 +182,18 @@ func (state *walkerState) walkValue(info WalkInfo) error {
 	case reflect.Struct:
 		return state.walkStruct(info)
 	default:
+		if info.IsFlat() {
+			return state.walkFlat(info)
+		}
 		return fmt.Errorf("can't walk into kind %v value: %w", info.Value.Kind(), ErrUnknownKind)
 	}
 }
 
-func (state *walkerState) walkFlat(info WalkInfo) error {
-	info.IsFlat = true
+func (state *walkerState) walkFlat(info *WalkInfo) error {
 	return state.callback(info)
 }
 
-func (state *walkerState) walkArray(info WalkInfo) error {
+func (state *walkerState) walkArray(info *WalkInfo) error {
 	if err := state.callback(info); err != nil {
 		if errors.Is(err, ErrSkip) {
 			return nil
@@ -199,29 +204,27 @@ func (state *walkerState) walkArray(info WalkInfo) error {
 	vLen := info.Value.Len()
 	for i := 0; i < vLen; i++ {
 		item := info.Value.Index(i)
-		iteminfo := newWalkerInfo(item)
-		if err := state.walkValue(iteminfo); err != nil {
+		itemInfo := newWalkerInfo(item, info)
+		if err := state.walkValue(itemInfo); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (state *walkerState) walkChan(info WalkInfo) error {
-	info.InternalStructSize = chanStructSize()
+func (state *walkerState) walkChan(info *WalkInfo) error {
 	return state.callback(info)
 }
 
-func (state *walkerState) walkFunc(info WalkInfo) error {
+func (state *walkerState) walkFunc(info *WalkInfo) error {
 	return state.callback(info)
 }
 
-func (state *walkerState) walkInterface(info WalkInfo) error {
-	info.InternalStructSize = interfaceSize()
+func (state *walkerState) walkInterface(info *WalkInfo) error {
 	return state.walkPtr(info)
 }
 
-func (state *walkerState) walkPtr(info WalkInfo) error {
+func (state *walkerState) walkPtr(info *WalkInfo) error {
 	if err := state.callback(info); err != nil {
 		if errors.Is(err, ErrSkip) {
 			return nil
@@ -232,11 +235,10 @@ func (state *walkerState) walkPtr(info WalkInfo) error {
 		return nil
 	}
 	elem := info.Value.Elem()
-	return state.walkValue(newWalkerInfo(elem))
+	return state.walkValue(newWalkerInfo(elem, info))
 }
 
-func (state *walkerState) walkMap(info WalkInfo) error {
-	info.InternalStructSize = mapSize()
+func (state *walkerState) walkMap(info *WalkInfo) error {
 	if err := state.callback(info); err != nil {
 		if errors.Is(err, ErrSkip) {
 			return nil
@@ -251,8 +253,8 @@ func (state *walkerState) walkMap(info WalkInfo) error {
 	iterator := info.Value.MapRange()
 	for iterator.Next() {
 		key := iterator.Key()
-		keyInfo := newWalkerInfo(key)
-		keyInfo.IsMapKey = true
+		keyInfo := newWalkerInfo(key, info)
+		keyInfo.isMapKey = true
 
 		if err := state.walkValue(keyInfo); err != nil {
 			if errors.Is(err, ErrSkip) {
@@ -262,7 +264,7 @@ func (state *walkerState) walkMap(info WalkInfo) error {
 		}
 
 		val := iterator.Value()
-		valInfo := newWalkerInfo(val)
+		valInfo := newWalkerInfo(val, info)
 		valInfo.IsMapValue = true
 		if err := state.walkValue(valInfo); err != nil {
 			return err
@@ -271,14 +273,7 @@ func (state *walkerState) walkMap(info WalkInfo) error {
 	return nil
 }
 
-func (state *walkerState) walkSlice(info WalkInfo) error {
-	const sliceSize = int(unsafe.Sizeof(reflect.SliceHeader{}) + uintptr(-int(unsafe.Sizeof(reflect.SliceHeader{}))&(maxAlign-1)))
-
-	info.InternalStructSize = sliceSize
-	if info.Value.Len() > 0 {
-		info.DataPointer = newWalkerInfo(info.Value.Index(0)).DirectPointer
-	}
-
+func (state *walkerState) walkSlice(info *WalkInfo) error {
 	if err := state.callback(info); err != nil {
 		if errors.Is(err, ErrSkip) {
 			return nil
@@ -289,7 +284,7 @@ func (state *walkerState) walkSlice(info WalkInfo) error {
 	sliceLen := info.Value.Len()
 	for i := 0; i < sliceLen; i++ {
 		item := info.Value.Index(i)
-		if err := state.walkValue(newWalkerInfo(item)); err != nil {
+		if err := state.walkValue(newWalkerInfo(item, info)); err != nil {
 			return err
 		}
 	}
@@ -297,21 +292,11 @@ func (state *walkerState) walkSlice(info WalkInfo) error {
 	return nil
 }
 
-func (state *walkerState) walkString(info WalkInfo) error {
-	const stringHeaderSize = int(unsafe.Sizeof(reflect.StringHeader{}) + uintptr(-int(unsafe.Sizeof(reflect.StringHeader{}))&(maxAlign-1)))
-
-	info.InternalStructSize = stringHeaderSize
-	if info.Value.Len() > 0 {
-		s := info.Value.String()
-		sPointer := &s
-		sInternalPointer := (*reflect.StringHeader)(unsafe.Pointer(sPointer))
-		info.DataPointer = unsafe.Pointer(sInternalPointer.Data)
-	}
-
+func (state *walkerState) walkString(info *WalkInfo) error {
 	return state.callback(info)
 }
 
-func (state *walkerState) walkStruct(info WalkInfo) error {
+func (state *walkerState) walkStruct(info *WalkInfo) error {
 	if err := state.callback(info); err != nil {
 		if errors.Is(err, ErrSkip) {
 			return nil
@@ -322,7 +307,7 @@ func (state *walkerState) walkStruct(info WalkInfo) error {
 	numField := info.Value.NumField()
 	for i := 0; i < numField; i++ {
 		fieldVal := info.Value.Field(i)
-		fieldInfo := newWalkerInfo(fieldVal)
+		fieldInfo := newWalkerInfo(fieldVal, info)
 		fieldInfo.IsStructField = true
 		if err := state.walkValue(fieldInfo); err != nil {
 			return err
