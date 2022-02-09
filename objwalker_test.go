@@ -288,6 +288,7 @@ func TestWalker_Map(t *testing.T) {
 				}
 				if info.Value.Kind() == reflect.String {
 					wasValue = true
+					require.True(t, info.IsMapValue())
 					require.Equal(t, info.Value.String(), "2")
 					if testName == "ErrorValue" {
 						return errTest
@@ -382,9 +383,13 @@ func TestWalker_Ptr(t *testing.T) {
 
 func TestWalker_KindRoute(t *testing.T) {
 	t.Run("BadKind", func(t *testing.T) {
-		//nolint:exhaustivestruct
-		err := newWalkerState(Walker{}).kindRoute(reflect.Kind(math.MaxUint), &WalkInfo{})
-		require.ErrorIs(t, err, ErrUnknownKind)
+		walker := New(func(info *WalkInfo) error {
+			return nil
+		})
+		state := newWalkerState(*walker)
+
+		require.ErrorIs(t, state.kindRoute(reflect.Invalid, &WalkInfo{}), errInvalidKind)
+		require.ErrorIs(t, state.kindRoute(reflect.Kind(math.MaxUint), &WalkInfo{}), ErrUnknownKind)
 	})
 }
 

@@ -16,6 +16,9 @@ var (
 	// for other kinds - unspecified behaviour and it may be change for feature versions
 	ErrSkip = errors.New("skip value")
 
+	// ErrInvalidKind
+	errInvalidKind = errors.New("unexpected invalid kind")
+
 	// ErrUnknownKind mean reflect walk see unknown kind of type - need to update library
 	ErrUnknownKind = errors.New("unknown kind")
 )
@@ -35,7 +38,8 @@ type WalkInfo struct {
 	// IsVisited true if loop protection disabled and walker detect about value was visited already
 	IsVisited bool
 
-	isMapKey bool
+	isMapValue bool
+	isMapKey   bool
 }
 
 // HasDirectPointer check if w.DirectPointer has non zero value
@@ -46,6 +50,11 @@ func (w *WalkInfo) HasDirectPointer() bool {
 // IsMapKey mean Value direct use as map key
 func (w *WalkInfo) IsMapKey() bool {
 	return w.isMapKey
+}
+
+// IsMapValue mean Value direct use as map value
+func (w *WalkInfo) IsMapValue() bool {
+	return w.isMapValue
 }
 
 func newWalkerInfo(v reflect.Value, parent *WalkInfo) *WalkInfo {
@@ -154,7 +163,7 @@ func (state *walkerState) walkValue(info *WalkInfo) error {
 func (state *walkerState) kindRoute(kind reflect.Kind, info *WalkInfo) error {
 	switch kind {
 	case reflect.Invalid:
-		return fmt.Errorf("unexpected invalid kind")
+		return errInvalidKind
 	case reflect.Array:
 		return state.walkArray(info)
 	case reflect.Interface, reflect.Ptr:
@@ -238,6 +247,7 @@ func (state *walkerState) walkMap(info *WalkInfo) error {
 
 		val := iterator.Value()
 		valInfo := newWalkerInfo(val, info)
+		valInfo.isMapValue = true
 		if err := state.walkValue(valInfo); err != nil {
 			return err
 		}
@@ -280,5 +290,6 @@ func (state *walkerState) walkStruct(info *WalkInfo) error {
 			return err
 		}
 	}
+
 	return nil
 }
