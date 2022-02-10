@@ -32,7 +32,7 @@ type WalkInfo struct {
 	// Parent == nil for first visited value
 	Parent *WalkInfo
 
-	// DirectPointer hold address of Value data (Value.ptr) 0 if value not addresable
+	// DirectPointer hold address of Value data (Value.ptr) 0 if value not addressable
 	DirectPointer unsafe.Pointer
 
 	// IsVisited true if loop protection disabled and walker detect about value was visited already
