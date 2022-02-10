@@ -21,6 +21,9 @@ var (
 
 	// ErrUnknownKind mean reflect walk see unknown kind of type - need to update library
 	ErrUnknownKind = errors.New("unknown kind")
+
+	// ErrBadInternalReflectValueDetected
+	ErrBadInternalReflectValueDetected = errors.New("bad internal reflection.Value representation detected")
 )
 
 // WalkInfo send to walk callback with every value
@@ -57,25 +60,24 @@ func (w *WalkInfo) IsMapValue() bool {
 	return w.isMapValue
 }
 
-func newWalkerInfo(v reflect.Value, parent *WalkInfo) *WalkInfo {
-	var res WalkInfo
-	if v.CanAddr() {
-		res.DirectPointer = unsafe.Pointer(v.UnsafeAddr())
-	}
-	res.Value = v
-	res.Parent = parent
-	return &res
-}
-
 // WalkFunc is type of callback function
 type WalkFunc func(info *WalkInfo) error
 
 type empty struct{}
 
 // Walker provide settings and state for Walk function
+// default values set with New func
 type Walker struct {
+	// LoopProtection if true - skip already visited values (default true)
 	LoopProtection bool
-	callback       WalkFunc
+
+	// UnsafeReadDirectPtr if true - direct read reflect.Value.Ptr it allow always get value address even if addressable flag is false and Value.CanAddr() is false.
+	// if UnsafeReadDirectPtr - walker.Walk check about it works good and return ErrBadInternalReflectValueDetected if detect mistake
+	// if false - use reflection CanAddr and UnsafeAddr() methods if available
+	// default - false
+	UnsafeReadDirectPtr bool
+
+	callback WalkFunc
 }
 
 // New create new walker with f callback
@@ -97,13 +99,18 @@ func New(f WalkFunc) *Walker {
 // Walk create new walker with empty state and run Walk over object
 func (w Walker) Walk(v interface{}) error {
 	walker := newWalkerState(w)
-	return walker.walk(v)
+	return walker.walk(v, checkValue())
 }
 
-// WithDisableLoopProtection disable loop protection.
+func (w *Walker) WithUnsafeReadDirectPtr(val bool) *Walker {
+	w.UnsafeReadDirectPtr = val
+	return w
+}
+
+// WithLoopProtection disable loop protection.
 // callback must self-detect loops and return ErrSkip
-func (w *Walker) WithDisableLoopProtection() *Walker {
-	w.LoopProtection = false
+func (w *Walker) WithLoopProtection(val bool) *Walker {
+	w.LoopProtection = val
 	return w
 }
 
@@ -123,12 +130,38 @@ func newWalkerState(opts Walker) *walkerState {
 	}
 }
 
-func (state *walkerState) walk(v interface{}) error {
+func (w *Walker) newWalkerInfo(v reflect.Value, parent *WalkInfo) *WalkInfo {
+	var res WalkInfo
+	if v.CanAddr() {
+		res.DirectPointer = w.getDirectPointer(&v)
+	}
+	res.Value = v
+	res.Parent = parent
+	return &res
+}
+
+func (w *Walker) getDirectPointer(v *reflect.Value) (res unsafe.Pointer) {
+	switch {
+	case w.UnsafeReadDirectPtr:
+		return newValue(v).ptr
+	case v.CanAddr():
+		//goland:noinspection ALL
+		return unsafe.Pointer(v.UnsafeAddr())
+	default:
+		return res
+	}
+}
+
+func (state *walkerState) walk(v interface{}, checkValueResult bool) error {
+	if state.UnsafeReadDirectPtr && !checkValueResult {
+		return ErrBadInternalReflectValueDetected
+	}
+
 	if v == nil {
 		return nil
 	}
 
-	valueInfo := newWalkerInfo(reflect.ValueOf(v), nil)
+	valueInfo := state.newWalkerInfo(reflect.ValueOf(v), nil)
 	return state.walkValue(valueInfo)
 }
 
@@ -198,7 +231,7 @@ func (state *walkerState) walkArray(info *WalkInfo) error {
 	vLen := info.Value.Len()
 	for i := 0; i < vLen; i++ {
 		item := info.Value.Index(i)
-		itemInfo := newWalkerInfo(item, info)
+		itemInfo := state.newWalkerInfo(item, info)
 		if err := state.walkValue(itemInfo); err != nil {
 			return err
 		}
@@ -217,7 +250,7 @@ func (state *walkerState) walkPtr(info *WalkInfo) error {
 		return nil
 	}
 	elem := info.Value.Elem()
-	return state.walkValue(newWalkerInfo(elem, info))
+	return state.walkValue(state.newWalkerInfo(elem, info))
 }
 
 func (state *walkerState) walkMap(info *WalkInfo) error {
@@ -235,7 +268,7 @@ func (state *walkerState) walkMap(info *WalkInfo) error {
 	iterator := info.Value.MapRange()
 	for iterator.Next() {
 		key := iterator.Key()
-		keyInfo := newWalkerInfo(key, info)
+		keyInfo := state.newWalkerInfo(key, info)
 		keyInfo.isMapKey = true
 
 		if err := state.walkValue(keyInfo); err != nil {
@@ -246,7 +279,7 @@ func (state *walkerState) walkMap(info *WalkInfo) error {
 		}
 
 		val := iterator.Value()
-		valInfo := newWalkerInfo(val, info)
+		valInfo := state.newWalkerInfo(val, info)
 		valInfo.isMapValue = true
 		if err := state.walkValue(valInfo); err != nil {
 			return err
@@ -266,7 +299,7 @@ func (state *walkerState) walkSlice(info *WalkInfo) error {
 	sliceLen := info.Value.Len()
 	for i := 0; i < sliceLen; i++ {
 		item := info.Value.Index(i)
-		if err := state.walkValue(newWalkerInfo(item, info)); err != nil {
+		if err := state.walkValue(state.newWalkerInfo(item, info)); err != nil {
 			return err
 		}
 	}
@@ -285,7 +318,7 @@ func (state *walkerState) walkStruct(info *WalkInfo) error {
 	numField := info.Value.NumField()
 	for i := 0; i < numField; i++ {
 		fieldVal := info.Value.Field(i)
-		fieldInfo := newWalkerInfo(fieldVal, info)
+		fieldInfo := state.newWalkerInfo(fieldVal, info)
 		if err := state.walkValue(fieldInfo); err != nil {
 			return err
 		}

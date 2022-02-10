@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +46,7 @@ func TestWalker_LoopProtected(t *testing.T) {
 				return errTest
 			}
 			return nil
-		}).WithDisableLoopProtection().Walk(&s)
+		}).WithLoopProtection(false).Walk(&s)
 		require.Equal(t, errTest, err)
 		require.Equal(t, callTimesLimit, callTimes)
 	})
@@ -118,6 +119,11 @@ func TestWalker_Walk(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, TestStruct{1}, v)
 		})
+	})
+
+	t.Run("BadCheckValueWithUnsafeRead", func(t *testing.T) {
+		state := newWalkerState(*New(nil).WithUnsafeReadDirectPtr(true))
+		require.ErrorIs(t, state.walk(nil, false), ErrBadInternalReflectValueDetected)
 	})
 
 	t.Run("nil", func(t *testing.T) {
@@ -548,6 +554,37 @@ func TestWalkStruct(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestWalkerState_GetDirectPointer(t *testing.T) {
+	t.Run("addressable", func(t *testing.T) {
+		vInt := 0
+		reflectValue := reflect.ValueOf(&vInt).Elem()
+		reflectPtr := reflectValue.UnsafeAddr()
+		require.Equal(t, uintptr(unsafe.Pointer(&vInt)), reflectPtr)
+
+		state := newWalkerState(Walker{UnsafeReadDirectPtr: false})
+		require.Equal(t, reflectPtr, uintptr(state.getDirectPointer(&reflectValue)))
+
+		state.UnsafeReadDirectPtr = true
+		require.Equal(t, reflectPtr, uintptr(state.getDirectPointer(&reflectValue)))
+	})
+
+	t.Run("unadressable", func(t *testing.T) {
+		vInt := 123
+		reflectValue := reflect.ValueOf(vInt)
+		require.False(t, reflectValue.CanAddr())
+
+		state := newWalkerState(Walker{UnsafeReadDirectPtr: false})
+		require.Zero(t, state.getDirectPointer(&reflectValue))
+
+		state.UnsafeReadDirectPtr = true
+		pointer := state.getDirectPointer(&reflectValue)
+
+		// reflect.ValueOf get copy of vInt within interface
+		require.NotEqual(t, uintptr(unsafe.Pointer(&vInt)), uintptr(pointer))
+		require.Equal(t, vInt, *(*int)(pointer))
 	})
 }
 
