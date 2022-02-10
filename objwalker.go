@@ -91,8 +91,9 @@ type Walker struct {
 // if f return other non nil error - stop walk and return the error to walk caller
 func New(f WalkFunc) *Walker {
 	return &Walker{
-		LoopProtection: true,
-		callback:       f,
+		LoopProtection:      true,
+		UnsafeReadDirectPtr: false,
+		callback:            f,
 	}
 }
 
