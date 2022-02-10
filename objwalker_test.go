@@ -248,6 +248,7 @@ func TestWalker_Interface(t *testing.T) {
 	require.True(t, wasInterface)
 }
 
+//nolint:gocyclo
 func TestWalker_Map(t *testing.T) {
 	t.Run("Nil", func(t *testing.T) {
 		var m map[int]int
