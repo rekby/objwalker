@@ -51,6 +51,8 @@ func TestWalker_LoopProtected(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo
+//gocyclo:ignore
 func TestWalker_Walk(t *testing.T) {
 	t.Run("Ok", func(t *testing.T) {
 		walker := New(func(info *WalkInfo) error {
@@ -129,6 +131,8 @@ func TestWalker_Walk(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo
+//gocyclo:ignore
 func TestWalker_WalkArray(t *testing.T) {
 	for _, testName := range []string{"Ok", "Skip", "ErrorArray", "ErrorItem"} {
 		t.Run(testName, func(t *testing.T) {
@@ -249,6 +253,7 @@ func TestWalker_Interface(t *testing.T) {
 }
 
 //nolint:gocyclo
+//gocyclo:ignore
 func TestWalker_Map(t *testing.T) {
 	t.Run("Nil", func(t *testing.T) {
 		var m map[int]int
@@ -331,6 +336,8 @@ func TestWalker_Map(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo
+//gocyclo:ignore
 func TestWalker_Ptr(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
 		for _, testName := range []string{"Ok", "Skip", "Error"} {
@@ -394,6 +401,8 @@ func TestWalker_KindRoute(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo
+//gocyclo:ignore
 func TestWalker_WalkSlice(t *testing.T) {
 	for _, testName := range []string{"Ok", "Skip", "Error", "ErrorItem"} {
 		t.Run(testName, func(t *testing.T) {
@@ -473,6 +482,8 @@ func TestWalkString(t *testing.T) {
 	})
 }
 
+//nolint:gocyclo
+//gocyclo:ignore
 func TestWalkStruct(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		val := struct{}{}
