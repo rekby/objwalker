@@ -12,6 +12,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: "v1.44"
+
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
@@ -23,11 +28,6 @@ jobs:
     - name: Test
       run: go test -race -covermode atomic -coverprofile=covprofile.out  ./...
       
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v2
-      with:
-        version: latest
-
     - name: Coveralls install goveralls
       run: go get github.com/mattn/goveralls
     
@@ -35,4 +35,3 @@ jobs:
       run: goveralls -coverprofile=covprofile.out -service=github
       env:
         COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      

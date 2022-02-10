@@ -9,30 +9,35 @@ It has loop protection - for not hang on cycled structured, protection can be di
 WalkInfo - struct, send as argument to callback function include:
 
 * ```Value``` - reflection.Value object for read/manipulate with it.
-* ```InternalStructSize``` - size of internal structs (slice/string header, map struct at first level, ...)
 * ```DataPointer``` - direct pointer to underly data, for example - pointer to bytes under string, ot pointer to data under slice. It is danger to manipulate it, but can userful for example for compare objects.
+* ```Parent``` - parent of the value in travel tree
 * and some other hints about Value
 
 ```golang
-	type S struct {
-		Val1  int
-		Slice []string
-	}
+    package main
 
-	v := S{
-		Val1:  2,
-		Slice: []string{"hello", "world"},
-	}
-	_ = New(func(info WalkInfo) error {
-		val := info.Value.Interface()
-		_ = val
-		if info.IsStructField {
-			fmt.Println(info.Value.Interface())
+    import "github.com/rekby/objwalker"
+
+    func main() {
+		type S struct {
+			Val1  int
+			Slice []string
 		}
-		return nil
-	}).Walk(v)
 
-	// Output:
-	// 2
-	// [hello world]
+		val := S{
+			Val1:  2,
+			Slice: []string{"hello", "world"},
+		}
+		_ = New(func(info *WalkInfo) error {
+			fmt.Println(info.Value.Interface())
+			return nil
+		}).Walk(val)
+
+		// Output:
+		// {2 [hello world]}
+		// 2
+		// [hello world]
+		// hello
+		// world
+	}
 ```
