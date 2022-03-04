@@ -1,6 +1,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/rekby/objwalker.svg)](https://pkg.go.dev/github.com/rekby/objwalker)
 [![Coverage Status](https://coveralls.io/repos/github/rekby/objwalker/badge.svg?branch=master)](https://coveralls.io/github/rekby/objwalker?branch=master)
 [![GoReportCard](https://goreportcard.com/badge/github.com/rekby/objwalker)](https://goreportcard.com/report/github.com/rekby/objwalker)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 
 Deep walk by object with reflection. Walker.Walk(v interface{}) call callback function for v object, every field if it struct, every item for slice/array and every key and item for map object. It walk for object recursive and call callback for every object in tree.
 
